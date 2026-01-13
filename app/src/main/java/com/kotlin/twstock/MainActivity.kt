@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.runtime.collectAsState
 import com.kotlin.twstock.ui.theme.TwstockSimpleAppTheme
 import com.kotlin.twstock.ui.screen.StockScreen
 
@@ -19,11 +20,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            TwstockSimpleAppTheme {
+            val viewModel: com.kotlin.twstock.ui.viewmodel.StockViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            val isDarkMode = viewModel.isDarkMode.collectAsState().value
+            
+            TwstockSimpleAppTheme(darkTheme = isDarkMode) {
                 // StockScreen handles its own Scaffold/Surface structure as needed, 
                 // but usually we want a high level container.
                 // StockScreen has a Scaffold, so we can just call it.
-                StockScreen()
+                StockScreen(viewModel = viewModel)
             }
         }
     }

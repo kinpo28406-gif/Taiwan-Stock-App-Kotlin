@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,10 +29,16 @@ import com.kotlin.twstock.ui.viewmodel.StockViewModel
 fun StockScreen(viewModel: StockViewModel = viewModel()) {
     val stocks by viewModel.stocks.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
 
     StockScreenContent(
         stocks = stocks,
         isLoading = isLoading,
+        searchQuery = searchQuery,
+        isDarkMode = isDarkMode,
+        onSearchQueryChange = { viewModel.onSearchQueryChanged(it) },
+        onToggleDarkMode = { viewModel.toggleDarkMode() },
         onSort = { ascending -> viewModel.sortById(ascending) },
         onLoadMore = { viewModel.loadNextPage() }
     )
@@ -40,36 +49,85 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
 fun StockScreenContent(
     stocks: List<Stock>,
     isLoading: Boolean,
+    searchQuery: String,
+    isDarkMode: Boolean,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleDarkMode: () -> Unit,
     onSort: (Boolean) -> Unit,
     onLoadMore: () -> Unit
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
-
     var selectedStock by remember { mutableStateOf<Stock?>(null) }
     
+    // Define colors based on isDarkMode
+    val containerColor = if (isDarkMode) Color(0xFF121212) else Color.White
+    val cardColor = if (isDarkMode) Color(0xFF1E1E1E) else Color(0xFFFCF5FC)
+    val textColor = if (isDarkMode) Color.White else Color.Black
+    val subTextColor = if (isDarkMode) Color.LightGray else Color.Gray
+
     Scaffold(
         topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+            Surface(
+                color = containerColor,
+                shadowElevation = 4.dp
             ) {
-               IconButton(
-                   onClick = { showBottomSheet = true },
-                   modifier = Modifier
-                       .align(Alignment.TopEnd)
-                       .size(48.dp)
-               ) {
-                   Icon(
-                       imageVector = Icons.Default.Menu,
-                       contentDescription = "Menu",
-                       tint = Color.Black
-                   )
-               }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Move down (top padding increased), reduce bottom space (bottom padding reduced)
+                        .padding(start = 16.dp, end = 16.dp, top = 48.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Dark Mode Toggle
+                    IconButton(onClick = onToggleDarkMode) {
+                        // Switch between Brightness7 (Sun/Day) and Brightness4 (Moon/Night)
+                        // If currently Dark, show Sun to switch to Light? Or show Moon to indicate state?
+                        // Typically: Show the icon of the mode you will SWITCH TO (i.e., opposite).
+                        // If isDarkMode is TRUE, show SUN (to switch to light).
+                        // If isDarkMode is FALSE, show MOON (to switch to dark).
+                        Icon(
+                            imageVector = if (isDarkMode) Icons.Default.Brightness7 else Icons.Default.Brightness4,
+                            contentDescription = "Toggle Dark Mode",
+                            tint = textColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Search Bar
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("搜尋股票代碼或名稱", color = subTextColor) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
+                            cursorColor = textColor,
+                            focusedBorderColor = textColor,
+                            unfocusedBorderColor = subTextColor
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Menu Button (Existing)
+                    IconButton(
+                        onClick = { showBottomSheet = true },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menu",
+                            tint = textColor
+                        )
+                    }
+                }
             }
         },
-        containerColor = Color.White
+        containerColor = containerColor
     ) { paddingValues ->
         if (isLoading) {
             Box(
@@ -78,7 +136,7 @@ fun StockScreenContent(
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = textColor)
             }
         } else {
             LazyColumn(
@@ -86,10 +144,18 @@ fun StockScreenContent(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
             ) {
                 items(stocks) { stock ->
-                    StockCard(stock, onClick = { selectedStock = stock })
+                    StockCard(
+                        stock = stock, 
+                        isDarkMode = isDarkMode,
+                        cardColor = cardColor,
+                        textColor = textColor,
+                        subTextColor = subTextColor,
+                        onClick = { selectedStock = stock }
+                    )
                 }
                 item {
                     LaunchedEffect(true) {
@@ -103,7 +169,7 @@ fun StockScreenContent(
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
-                containerColor = Color(0xFFF8F0FA)
+                containerColor = if (isDarkMode) Color(0xFF2C2C2C) else Color(0xFFF8F0FA)
             ) {
                 Column(
                     modifier = Modifier
@@ -119,7 +185,8 @@ fun StockScreenContent(
                                 showBottomSheet = false 
                             }
                             .padding(16.dp),
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        color = textColor
                     )
                     Text(
                         text = "依股票代號升序",
@@ -130,7 +197,8 @@ fun StockScreenContent(
                                 showBottomSheet = false 
                             }
                             .padding(16.dp),
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        color = textColor
                     )
                 }
             }
@@ -139,6 +207,9 @@ fun StockScreenContent(
         selectedStock?.let { stock ->
             AlertDialog(
                 onDismissRequest = { selectedStock = null },
+                containerColor = if (isDarkMode) Color(0xFF2C2C2C) else Color.White,
+                titleContentColor = textColor,
+                textContentColor = textColor,
                 title = { Text(text = "${stock.name} (${stock.id})") },
                 text = {
                    Column {
@@ -159,7 +230,7 @@ fun StockScreenContent(
                 },
                 confirmButton = {
                     TextButton(onClick = { selectedStock = null }) {
-                        Text("關閉")
+                        Text("關閉", color = textColor)
                     }
                 }
             )
@@ -168,10 +239,17 @@ fun StockScreenContent(
 }
 
 @Composable
-fun StockCard(stock: Stock, onClick: () -> Unit = {}) {
+fun StockCard(
+    stock: Stock, 
+    isDarkMode: Boolean = false,
+    cardColor: Color = Color(0xFFFCF5FC),
+    textColor: Color = Color.DarkGray,
+    subTextColor: Color = Color.Gray,
+    onClick: () -> Unit = {}
+) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFCF5FC)), // Very light pink/purple
+        colors = CardDefaults.cardColors(containerColor = cardColor), 
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -181,14 +259,14 @@ fun StockCard(stock: Stock, onClick: () -> Unit = {}) {
             Text(
                 text = stock.id,
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = subTextColor
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stock.name,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.DarkGray
+                color = textColor
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -197,22 +275,22 @@ fun StockCard(stock: Stock, onClick: () -> Unit = {}) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 // Column 1
                 Column(modifier = Modifier.weight(1f)) {
-                    StatRow("開盤價", stock.openPrice, Color.Black)
+                    StatRow("開盤價", stock.openPrice, textColor, subTextColor)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatRow("最高價", stock.highPrice, Color.Black)
+                    StatRow("最高價", stock.highPrice, textColor, subTextColor)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatRow("漲跌價差", stock.spread, getSpreadColor(stock.spread))
+                    StatRow("漲跌價差", stock.spread, getSpreadColor(stock.spread), subTextColor)
                 }
                 
                 Spacer(modifier = Modifier.width(16.dp))
                 
                 // Column 2
                 Column(modifier = Modifier.weight(1f)) {
-                    StatRow("收盤價", stock.closePrice, getPriceCompareColor(stock.closePrice, stock.monthlyAvg))
+                    StatRow("收盤價", stock.closePrice, getPriceCompareColor(stock.closePrice, stock.monthlyAvg), subTextColor)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatRow("最低價", stock.lowPrice, Color.Black)
+                    StatRow("最低價", stock.lowPrice, textColor, subTextColor)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatRow("月平均價", stock.monthlyAvg, Color.Black)
+                    StatRow("月平均價", stock.monthlyAvg, textColor, subTextColor)
                 }
             }
 
@@ -223,16 +301,21 @@ fun StockCard(stock: Stock, onClick: () -> Unit = {}) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                BottomStatItem("成交筆數", "(${stock.txCount})")
-                BottomStatItem("成交股數", "(${stock.txShares})")
-                BottomStatItem("成交金額", "(${stock.txAmount})")
+                BottomStatItem("成交筆數", "(${stock.txCount})", textColor, subTextColor)
+                BottomStatItem("成交股數", "(${stock.txShares})", textColor, subTextColor)
+                BottomStatItem("成交金額", "(${stock.txAmount})", textColor, subTextColor)
             }
         }
     }
 }
 
 @Composable
-fun StatRow(label: String, value: String, valueColor: Color) {
+fun StatRow(
+    label: String, 
+    value: String, 
+    valueColor: Color, 
+    labelColor: Color = Color.Gray
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -242,14 +325,9 @@ fun StatRow(label: String, value: String, valueColor: Color) {
         Text(
             text = label,
             fontSize = 14.sp,
-            color = Color.Gray
+            color = labelColor
         )
-        // Value with parentheses if needed, but per my previous plan, I was mimicking the style.
-        // The image shows (Value) for the grid items too?
-        // "開盤價 (開盤價)" - The layout shows standard Label + Value. 
-        // Wait, looking at the image: "開盤價      (開盤價)"
-        // It seems the value is enclosed in parentheses in the image.
-        // I will add parentheses to the value display logic here to match the image precisely.
+        // Value
         Text(
             text = "($value)", 
             fontSize = 16.sp,
@@ -260,17 +338,22 @@ fun StatRow(label: String, value: String, valueColor: Color) {
 }
 
 @Composable
-fun BottomStatItem(label: String, value: String) {
+fun BottomStatItem(
+    label: String, 
+    value: String,
+    valueColor: Color = Color.Black,
+    labelColor: Color = Color.Gray
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
             fontSize = 11.sp,
-            color = Color.Gray
+            color = labelColor
         )
         Text(
             text = value,
             fontSize = 11.sp,
-            color = Color.Black
+            color = valueColor
         )
     }
 }
@@ -315,6 +398,10 @@ fun StockScreenPreview() {
     StockScreenContent(
         stocks = mockStocks,
         isLoading = false,
+        searchQuery = "",
+        isDarkMode = false,
+        onSearchQueryChange = {},
+        onToggleDarkMode = {},
         onSort = {},
         onLoadMore = {}
     )
