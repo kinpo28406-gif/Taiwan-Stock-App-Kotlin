@@ -301,9 +301,9 @@ fun StockCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                BottomStatItem("成交筆數", "(${stock.txCount})", textColor, subTextColor)
-                BottomStatItem("成交股數", "(${stock.txShares})", textColor, subTextColor)
-                BottomStatItem("成交金額", "(${stock.txAmount})", textColor, subTextColor)
+                BottomStatItem("成交筆數", "${stock.txCount} 筆", textColor, subTextColor)
+                BottomStatItem("成交量", formatShares(stock.txShares), textColor, subTextColor)
+                BottomStatItem("成交額", formatAmount(stock.txAmount), textColor, subTextColor)
             }
         }
     }
@@ -432,5 +432,21 @@ fun getPriceCompareColor(price: String, compareTo: String): Color {
         p > c -> Color.Red
         p < c -> Color(0xFF00C853)
         else -> Color.Black
+    }
+}
+
+fun formatShares(value: String): String {
+    val num = parseDouble(value) ?: return value
+    val lots = num / 1000
+    // Format with commas, integer
+    return java.text.NumberFormat.getIntegerInstance().format(lots.toInt()) + " 張"
+}
+
+fun formatAmount(value: String): String {
+    val num = parseDouble(value) ?: return value
+    return when {
+         num >= 100_000_000 -> String.format("%.2f 億", num / 100_000_000)
+         num >= 10_000 -> String.format("%.2f 萬", num / 10_000)
+         else -> value
     }
 }
