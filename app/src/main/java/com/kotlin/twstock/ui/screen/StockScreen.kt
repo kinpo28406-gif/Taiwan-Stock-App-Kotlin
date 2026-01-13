@@ -12,6 +12,13 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material3.*
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,11 +88,7 @@ fun StockScreenContent(
                 ) {
                     // Dark Mode Toggle
                     IconButton(onClick = onToggleDarkMode) {
-                        // Switch between Brightness7 (Sun/Day) and Brightness4 (Moon/Night)
-                        // If currently Dark, show Sun to switch to Light? Or show Moon to indicate state?
-                        // Typically: Show the icon of the mode you will SWITCH TO (i.e., opposite).
-                        // If isDarkMode is TRUE, show SUN (to switch to light).
-                        // If isDarkMode is FALSE, show MOON (to switch to dark).
+                        // Switch between Light/Dark icons (using Face/Star as standard icon placeholders if Brightness is missing)
                         Icon(
                             imageVector = if (isDarkMode) Icons.Default.Brightness7 else Icons.Default.Brightness4,
                             contentDescription = "Toggle Dark Mode",
@@ -96,18 +99,26 @@ fun StockScreenContent(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     // Search Bar
-                    OutlinedTextField(
+                    TextField(
                         value = searchQuery,
                         onValueChange = onSearchQueryChange,
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("搜尋股票代碼或名稱", color = subTextColor) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp), // Standard height
+                        placeholder = { Text("搜尋股票代碼", style = MaterialTheme.typography.bodyLarge, color = subTextColor) },
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
+                        shape = RoundedCornerShape(28.dp), // Fully rounded (Capsule)
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = subTextColor)
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = if (isDarkMode) Color(0xFF333333) else Color(0xFFF0F0F0),
+                            unfocusedContainerColor = if (isDarkMode) Color(0xFF333333) else Color(0xFFF0F0F0),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = textColor,
                             unfocusedTextColor = textColor,
-                            cursorColor = textColor,
-                            focusedBorderColor = textColor,
-                            unfocusedBorderColor = subTextColor
+                            cursorColor = textColor
                         )
                     )
 
@@ -139,27 +150,33 @@ fun StockScreenContent(
                 CircularProgressIndicator(color = textColor)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
-            ) {
-                items(stocks) { stock ->
-                    StockCard(
-                        stock = stock, 
-                        isDarkMode = isDarkMode,
-                        cardColor = cardColor,
-                        textColor = textColor,
-                        subTextColor = subTextColor,
-                        onClick = { selectedStock = stock }
-                    )
-                }
-                item {
-                    LaunchedEffect(true) {
-                        onLoadMore()
+            // Apply Crossfade for smooth transition when sorting/filtering changes
+            Crossfade(targetState = stocks, label = "StockListTransition") { currentStocks ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
+                ) {
+                    items(
+                        items = currentStocks,
+                        key = { it.id }
+                    ) { stock ->
+                        StockCard(
+                            stock = stock, 
+                            isDarkMode = isDarkMode,
+                            cardColor = cardColor,
+                            textColor = textColor,
+                            subTextColor = subTextColor,
+                            onClick = { selectedStock = stock }
+                        )
+                    }
+                    item {
+                        LaunchedEffect(true) {
+                            onLoadMore()
+                        }
                     }
                 }
             }
@@ -245,27 +262,27 @@ fun StockCard(
     cardColor: Color = Color(0xFFFCF5FC),
     textColor: Color = Color.DarkGray,
     subTextColor: Color = Color.Gray,
+    modifier: Modifier = Modifier, // Allow passing modifier
     onClick: () -> Unit = {}
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor), 
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .bouncyClickable(onClick = onClick) // Use custom bouncy effect
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: ID and Name
             Text(
                 text = stock.id,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelMedium,
                 color = subTextColor
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stock.name,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = textColor
             )
             
@@ -449,4 +466,29 @@ fun formatAmount(value: String): String {
          num >= 10_000 -> String.format("%.2f 萬", num / 10_000)
          else -> value
     }
+}
+
+// Custom Modifier for Bouncy Click Effect
+@Composable
+fun Modifier.bouncyClickable(
+    onClick: () -> Unit
+): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        label = "PressScale"
+    )
+
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = LocalIndication.current,
+            onClick = onClick
+        )
 }
