@@ -11,5 +11,8 @@ data class Stock(
     val monthlyAvg: String,
     val txCount: String,
     val txShares: String,
-    val txAmount: String
+    val txAmount: String,
+    val peRatio: String,       // 本益比
+    val dividendYield: String, // 殖利率
+    val pbRatio: String        // 股價淨值比
 )

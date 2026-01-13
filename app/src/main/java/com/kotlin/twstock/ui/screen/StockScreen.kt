@@ -18,57 +18,36 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlin.twstock.data.Stock
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kotlin.twstock.ui.viewmodel.StockViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StockScreen() {
-    val stocks = remember {
-        listOf(
-            Stock(
-                id = "2330",
-                name = "台積電",
-                openPrice = "580.0",
-                closePrice = "585.0",
-                highPrice = "588.0",
-                lowPrice = "578.0",
-                spread = "+5.0",
-                monthlyAvg = "570.0",
-                txCount = "10,234",
-                txShares = "23,456,789",
-                txAmount = "13,605,937,620"
-            ),
-            Stock(
-                id = "0050",
-                name = "元大台灣50",
-                openPrice = "128.5",
-                closePrice = "129.0",
-                highPrice = "129.2",
-                lowPrice = "128.0",
-                spread = "+0.5",
-                monthlyAvg = "127.5",
-                txCount = "5,432",
-                txShares = "11,223,344",
-                txAmount = "1,447,811,376"
-            ),
-             Stock(
-                id = "2603",
-                name = "長榮",
-                openPrice = "155.0",
-                closePrice = "153.5",
-                highPrice = "156.0",
-                lowPrice = "153.0",
-                spread = "-1.5",
-                monthlyAvg = "150.0",
-                txCount = "8,765",
-                txShares = "15,678,901",
-                txAmount = "2,406,711,303"
-            )
-        )
-    }
+fun StockScreen(viewModel: StockViewModel = viewModel()) {
+    val stocks by viewModel.stocks.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
+    StockScreenContent(
+        stocks = stocks,
+        isLoading = isLoading,
+        onSort = { ascending -> viewModel.sortById(ascending) },
+        onLoadMore = { viewModel.loadNextPage() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StockScreenContent(
+    stocks: List<Stock>,
+    isLoading: Boolean,
+    onSort: (Boolean) -> Unit,
+    onLoadMore: () -> Unit
+) {
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
+    var selectedStock by remember { mutableStateOf<Stock?>(null) }
+    
     Scaffold(
         topBar = {
             Box(
@@ -76,9 +55,6 @@ fun StockScreen() {
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
-               // Title or empty specific area? Image shows just a menu button top right.
-               // It seems the white area extends.
-               // We will put the menu button top right.
                IconButton(
                    onClick = { showBottomSheet = true },
                    modifier = Modifier
@@ -95,15 +71,31 @@ fun StockScreen() {
         },
         containerColor = Color.White
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(stocks) { stock ->
-                StockCard(stock)
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(stocks) { stock ->
+                    StockCard(stock, onClick = { selectedStock = stock })
+                }
+                item {
+                    LaunchedEffect(true) {
+                        onLoadMore()
+                    }
+                }
             }
         }
 
@@ -111,19 +103,21 @@ fun StockScreen() {
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
-                containerColor = Color(0xFFF8F0FA) // Light purple background for sheet
+                containerColor = Color(0xFFF8F0FA)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 32.dp, top = 8.dp)
                 ) {
-                     // The drag handle is default
                     Text(
                         text = "依股票代號降序",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showBottomSheet = false }
+                            .clickable { 
+                                onSort(false)
+                                showBottomSheet = false 
+                            }
                             .padding(16.dp),
                         fontSize = 18.sp
                     )
@@ -131,22 +125,56 @@ fun StockScreen() {
                         text = "依股票代號升序",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showBottomSheet = false }
+                            .clickable { 
+                                onSort(true)
+                                showBottomSheet = false 
+                            }
                             .padding(16.dp),
                         fontSize = 18.sp
                     )
                 }
             }
         }
+        
+        selectedStock?.let { stock ->
+            AlertDialog(
+                onDismissRequest = { selectedStock = null },
+                title = { Text(text = "${stock.name} (${stock.id})") },
+                text = {
+                   Column {
+                        Text(text = "月平均價: ${stock.monthlyAvg}")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = "本益比: ${stock.peRatio}")
+
+                        // 判斷殖利率是否有資料
+                        val yieldText = if (stock.dividendYield.isNullOrBlank() || stock.dividendYield == "無資料") {
+                            "無資料"
+                        } else {
+                            "${stock.dividendYield}%"
+                        }
+                        Text(text = "殖利率: $yieldText")
+
+                        Text(text = "股價淨值比: ${stock.pbRatio}")
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { selectedStock = null }) {
+                        Text("關閉")
+                    }
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun StockCard(stock: Stock) {
+fun StockCard(stock: Stock, onClick: () -> Unit = {}) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFCF5FC)), // Very light pink/purple
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: ID and Name
@@ -169,18 +197,18 @@ fun StockCard(stock: Stock) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 // Column 1
                 Column(modifier = Modifier.weight(1f)) {
-                    StatRow("開盤價", stock.openPrice, Color(0xFF00C853))
+                    StatRow("開盤價", stock.openPrice, Color.Black)
                     Spacer(modifier = Modifier.height(8.dp))
                     StatRow("最高價", stock.highPrice, Color.Black)
                     Spacer(modifier = Modifier.height(8.dp))
-                    StatRow("漲跌價差", stock.spread, Color(0xFF00C853))
+                    StatRow("漲跌價差", stock.spread, getSpreadColor(stock.spread))
                 }
                 
                 Spacer(modifier = Modifier.width(16.dp))
                 
                 // Column 2
                 Column(modifier = Modifier.weight(1f)) {
-                    StatRow("收盤價", stock.closePrice, Color(0xFF00C853))
+                    StatRow("收盤價", stock.closePrice, getPriceCompareColor(stock.closePrice, stock.monthlyAvg))
                     Spacer(modifier = Modifier.height(8.dp))
                     StatRow("最低價", stock.lowPrice, Color.Black)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -250,5 +278,72 @@ fun BottomStatItem(label: String, value: String) {
 @Preview(showBackground = true)
 @Composable
 fun StockScreenPreview() {
-    StockScreen()
+    val mockStocks = listOf(
+        Stock(
+            id = "2330",
+            name = "台積電",
+            openPrice = "580.0",
+            closePrice = "585.0",
+            highPrice = "588.0",
+            lowPrice = "578.0",
+            spread = "+5.0",
+            monthlyAvg = "570.0",
+            txCount = "10,234",
+            txShares = "23,456,789",
+            txAmount = "13,605,937,620",
+            peRatio = "20.5",
+            dividendYield = "2.5",
+            pbRatio = "3.2"
+        ),
+        Stock(
+            id = "0050",
+            name = "元大台灣50",
+            openPrice = "128.5",
+            closePrice = "129.0",
+            highPrice = "129.2",
+            lowPrice = "128.0",
+            spread = "+0.5",
+            monthlyAvg = "127.5",
+            txCount = "5,432",
+            txShares = "11,223,344",
+            txAmount = "1,447,811,376",
+            peRatio = "-",
+            dividendYield = "3.1",
+            pbRatio = "-"
+        )
+    )
+    StockScreenContent(
+        stocks = mockStocks,
+        isLoading = false,
+        onSort = {},
+        onLoadMore = {}
+    )
+}
+
+fun parseDouble(value: String): Double? {
+    return try {
+        value.replace(",", "").replace("+", "").toDouble()
+    } catch (e: NumberFormatException) {
+        null
+    }
+}
+
+fun getSpreadColor(spread: String): Color {
+    val value = parseDouble(spread) ?: return Color.Black
+    return when {
+        value > 0 -> Color.Red
+        value < 0 -> Color(0xFF00C853)
+        else -> Color.Black
+    }
+}
+
+fun getPriceCompareColor(price: String, compareTo: String): Color {
+    val p = parseDouble(price) ?: return Color.Black
+    val c = parseDouble(compareTo) ?: return Color.Black
+    
+    return when {
+        p > c -> Color.Red
+        p < c -> Color(0xFF00C853)
+        else -> Color.Black
+    }
 }
