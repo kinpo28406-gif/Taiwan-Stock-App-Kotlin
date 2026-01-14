@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -38,16 +39,19 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     StockScreenContent(
         stocks = stocks,
         isLoading = isLoading,
+        errorMessage = errorMessage,
         searchQuery = searchQuery,
         isDarkMode = isDarkMode,
         onSearchQueryChange = { viewModel.onSearchQueryChanged(it) },
         onToggleDarkMode = { viewModel.toggleDarkMode() },
         onSort = { ascending -> viewModel.sortById(ascending) },
-        onLoadMore = { viewModel.loadNextPage() }
+        onLoadMore = { viewModel.loadNextPage() },
+        onRetry = { viewModel.retry() }
     )
 }
 
@@ -56,12 +60,14 @@ fun StockScreen(viewModel: StockViewModel = viewModel()) {
 fun StockScreenContent(
     stocks: List<Stock>,
     isLoading: Boolean,
+    errorMessage: String? = null,
     searchQuery: String,
     isDarkMode: Boolean,
     onSearchQueryChange: (String) -> Unit,
     onToggleDarkMode: () -> Unit,
     onSort: (Boolean) -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -140,7 +146,42 @@ fun StockScreenContent(
         },
         containerColor = containerColor
     ) { paddingValues ->
-        if (isLoading) {
+        if (errorMessage != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = "Error",
+                        tint = Color.Red,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = textColor
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDarkMode) Color.DarkGray else Color.Black,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("重試")
+                    }
+                }
+            }
+        } else if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

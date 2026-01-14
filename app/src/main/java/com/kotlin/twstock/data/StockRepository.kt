@@ -9,7 +9,6 @@ class StockRepository {
     private val api = RetrofitInstance.api
 
     suspend fun getStocks(): List<Stock> = coroutineScope {
-        try {
             // Initiate all requests in parallel
             val stockDayDeferred = async { api.getStockDayAll() }
             val bwibbuDeferred = async { api.getBwibbuAll() }
@@ -44,9 +43,5 @@ class StockRepository {
                     pbRatio = bwibbu?.pbRatio ?: "無資料"
                 )
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            emptyList()
-        }
     }
 }

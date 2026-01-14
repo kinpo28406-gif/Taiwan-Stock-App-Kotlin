@@ -27,6 +27,9 @@ class StockViewModel : ViewModel() {
     private val _isDarkMode = MutableStateFlow(false)
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     private var currentPage = 0
     private val pageSize = 20
     private var isAscending = false // Track sort order
@@ -38,15 +41,26 @@ class StockViewModel : ViewModel() {
     private fun fetchStocks() {
         viewModelScope.launch {
             _isLoading.value = true
-            val data = repository.getStocks()
-            // Initial load - default sort descending
-            _allStocks = data
-            _filteredStocks = data.sortedByDescending { it.id }
-            
-            currentPage = 0
-            loadNextPage(reset = true)
-            _isLoading.value = false
+            _errorMessage.value = null // Clear previous errors
+            try {
+                val data = repository.getStocks()
+                // Initial load - default sort descending
+                _allStocks = data
+                _filteredStocks = data.sortedByDescending { it.id }
+                
+                currentPage = 0
+                loadNextPage(reset = true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _errorMessage.value = "網路連線異常，請檢查您的網路設定。"
+            } finally {
+                _isLoading.value = false
+            }
         }
+    }
+
+    fun retry() {
+        fetchStocks()
     }
 
     fun onSearchQueryChanged(query: String) {
